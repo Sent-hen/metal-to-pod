@@ -67,7 +67,7 @@ This intentionally stays at the primitive level rather than layering on service 
 
 | Need | Notes |
 |---|---|
-| **16 GB RAM free for VMs**, 4+ cores, ~60 GB disk | default profile: cp1 4 GB, workers 3 GB each, ci 4 GB (see *Smaller hosts* below) |
+| **16 GB RAM host**, 4+ cores, ~50 GB free disk | the default profile is sized for a 16 GB laptop (built on an ASUS ROG Zephyrus G16): cp1 2 GB, workers 2 GB each, ci 3 GB = **9 GB for VMs**. See *Host sizing* below |
 | [VMware Workstation Pro](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion) 17+ | free for personal use |
 | [Vagrant](https://developer.hashicorp.com/vagrant/install) 2.4+ | |
 | [Vagrant VMware Utility](https://developer.hashicorp.com/vagrant/install/vmware) | a Windows service; must be running |
@@ -209,9 +209,24 @@ promtool check rules deploy/monitoring/slo-rules.yml
 promtool test rules deploy/monitoring/slo-rules.test.yml
 ```
 
-## Smaller hosts
+## Host sizing
 
-In `provision/lab.env` set `WORKER_COUNT=1` and lower the memory (`CP_MEMORY=2560`, `WORKER_MEMORY=2560`, `CI_MEMORY=3072`). That totals about 8 GB. With a single worker, the drain drill is blocked by the PDB, which is itself a good thing to observe.
+The defaults in `provision/lab.env` target a **16 GB laptop**: 9 GB for the four VMs, leaving about 7 GB for Windows. On a machine like the G16, RAM is the limit, not CPU (8 vCPUs total is light for a modern laptop chip).
+
+Before `vagrant up` on a 16 GB host:
+
+- **Free memory.** Close Chrome or Edge, games, and launchers. If you use WSL2 or Docker Desktop, run `wsl --shutdown`: the `vmmem` process can hold several GB.
+- **Plug in and use the Performance / Turbo profile** in Armoury Crate. On battery, the laptop throttles and provisioning slows down a lot.
+- **Hyper-V / Memory Integrity:** Windows 11 often has Virtualization-Based Security on. VMware Workstation 17 still runs, through the Windows Hypervisor Platform, but more slowly. That is fine for this lab; turn it off only if you understand the security trade-off.
+- **Check headroom while it runs:** Task Manager → Performance → Memory. If Windows starts paging heavily, run `vagrant halt ci` while you explore the cluster, and start it again with `vagrant up ci`.
+
+| Host RAM | Profile (`lab.env`) | VM total |
+|---|---|---|
+| 16 GB *(default)* | CP 2048, 2 workers × 2048, CI 3072 | 9 GB |
+| 16 GB, still tight | `WORKER_COUNT=1`, CI 2560 | 6.5 GB. The drain drill gets blocked by the PDB, which is itself worth observing |
+| 32 GB+ | CP 4096, 2 workers × 3072, CI 4096 | 14 GB |
+
+Change sizing before the first `vagrant up`. To resize existing VMs, run `vagrant reload <vm>` (memory takes effect on restart). Changing `WORKER_COUNT` after the cluster exists means `vagrant destroy -f` and starting over, because every VM's `/etc/hosts` is generated from it.
 
 ## Running on ESXi or bare metal instead of Workstation
 
@@ -233,6 +248,8 @@ The provisioning scripts assume only Ubuntu 24.04 and a directory shared between
 
 | Symptom | Fix |
 |---|---|
+| host freezes or VMs crawl during `vagrant up` | out of RAM: see *Host sizing*. Close apps, run `wsl --shutdown`, or use the 1-worker profile |
+| `kubeadm init` preflight: `the system RAM (... MB) is less than the minimum 1700 MB` | `CP_MEMORY` set below 2048 in `lab.env` |
 | `vagrant up` can't find the provider | the Vagrant VMware Utility service must be running: `Get-Service vagrant-vmware-utility` |
 | scripts fail with `$'\r': command not found` | CRLF line endings. `.gitattributes` forces LF; re-checkout: `git rm -r --cached . ; git reset --hard` |
 | worker waits forever for `join.sh` | cp1 provisioning failed; see `vagrant provision cp1`. VMs must come up with `--no-parallel` |

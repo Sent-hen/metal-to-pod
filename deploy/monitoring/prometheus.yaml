@@ -42,8 +42,9 @@ spec:
             httpGet: { path: /-/healthy, port: web }
             periodSeconds: 20
           resources:
-            requests: { cpu: 100m, memory: 256Mi }
-            limits: { memory: 768Mi }
+            # ~a dozen targets and 3 days of retention need well under 512Mi.
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 512Mi }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
