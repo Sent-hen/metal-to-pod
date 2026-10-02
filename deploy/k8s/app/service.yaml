@@ -1,0 +1,18 @@
+# NodePort keeps the lab free of an ingress controller or load balancer: the
+# service answers on port 30080 of every node. kube-proxy forwards to a Ready
+# pod on any node, so hitting a node that runs no replica still works.
+apiVersion: v1
+kind: Service
+metadata:
+  name: delivery-promise
+  labels:
+    app.kubernetes.io/name: delivery-promise
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: delivery-promise
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30080

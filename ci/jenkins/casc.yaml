@@ -1,0 +1,60 @@
+# Jenkins Configuration as Code. Jenkins is disposable: delete the jenkins-home
+# volume, restart, and this file rebuilds the same controller - users,
+# credentials and the pipeline job included. Nothing is configured by clicking.
+jenkins:
+  systemMessage: "metal-to-pod lab CI. Configured from ci/jenkins/casc.yaml - UI changes will be lost on restart."
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: ${JENKINS_ADMIN_PASSWORD}
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+unclassified:
+  location:
+    url: ${JENKINS_URL}
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          # Namespace-scoped ServiceAccount kubeconfig (deploy/platform/deployer-rbac.yaml).
+          # Exposed to the pipeline only inside withCredentials { } and masked in logs.
+          - file:
+              scope: GLOBAL
+              id: deployer-kubeconfig
+              description: jenkins-deployer ServiceAccount (logistics namespace only)
+              fileName: kubeconfig
+              secretBytes: ${readFileBase64:/run/secrets/deployer.kubeconfig}
+
+jobs:
+  - script: >
+      pipelineJob('delivery-promise') {
+        description('Commit -> test -> image -> registry -> cluster. Defined in ci/jenkins/casc.yaml; stages live in the repo Jenkinsfile.')
+        properties {
+          pipelineTriggers {
+            triggers {
+              pollSCM {
+                scmpoll_spec('H/15 * * * *')
+              }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('file:///srv/git/metal-to-pod.git') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }

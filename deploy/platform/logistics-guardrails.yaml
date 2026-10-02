@@ -1,0 +1,42 @@
+# Tenant guardrails for the app namespace.
+
+# Default-deny ingress: pods accept no traffic unless a policy allows it. The
+# app ships its own allow rule (deploy/k8s/app/networkpolicy.yaml).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: logistics
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Caps what the namespace can consume, so a runaway rollout (or a replicas: 300
+# typo) cannot starve the rest of the cluster. Sized to allow a full surge.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: logistics-quota
+  namespace: logistics
+spec:
+  hard:
+    pods: "20"
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.memory: 4Gi
+---
+# Defaults for containers that forget to declare resources (required by the
+# quota above - otherwise such pods would be rejected outright).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: logistics-defaults
+  namespace: logistics
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        memory: 256Mi

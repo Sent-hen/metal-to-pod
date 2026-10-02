@@ -1,0 +1,22 @@
+# App layer: everything the pipeline is allowed to apply. The pipeline does not
+# edit this file; it generates a tiny overlay that pins the image tag to the
+# commit being deployed (see scripts/ci/deploy.sh).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: logistics
+resources:
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+configMapGenerator:
+  # Hash-suffixed name: editing network.json produces a NEW ConfigMap and a
+  # rolling update. Old ConfigMaps are intentionally left in place so that
+  # `kubectl rollout undo` can return to a ReplicaSet that still references one.
+  - name: delivery-promise-network
+    files:
+      - network.json
+images:
+  - name: delivery-promise
+    newName: registry.lab:5000/delivery-promise
+    newTag: unset # always overridden by the pipeline overlay

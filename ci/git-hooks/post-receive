@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Installed into /srv/git/metal-to-pod.git/hooks/ by provision/ci.sh.
+#
+# Runs after every successful `git push`. Tells Jenkins "this repository
+# changed"; Jenkins then polls it, sees the new commit, and starts a build.
+# This is the whole "on every commit" trigger - no SaaS webhook involved.
+while read -r _old new ref; do
+  echo "metal-to-pod: received ${ref} -> ${new:0:12}"
+done
+if curl -fsS --max-time 5 \
+     "http://localhost:8080/git/notifyCommit?url=file:///srv/git/metal-to-pod.git" >/dev/null; then
+  echo "metal-to-pod: Jenkins notified - watch http://192.168.60.20:8080/job/delivery-promise/"
+else
+  echo "metal-to-pod: WARNING could not reach Jenkins; it will pick the commit up on its next scheduled poll"
+fi

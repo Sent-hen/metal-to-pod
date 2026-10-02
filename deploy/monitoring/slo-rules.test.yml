@@ -1,0 +1,73 @@
+# Unit tests for slo-rules.yml. Alert rules are code; test them like code:
+#   promtool test rules deploy/monitoring/slo-rules.test.yml
+rule_files: [slo-rules.yml]
+evaluation_interval: 30s
+
+tests:
+  # 100 req/s with 10% failing = 20x the 0.5% budget rate (> 14.4x): page.
+  # Health-check traffic must not dilute the error ratio.
+  - interval: 30s
+    input_series:
+      - series: 'http_requests_total{app="delivery-promise",route="POST /v1/promise",code="200"}'
+        values: '0+2700x240'
+      - series: 'http_requests_total{app="delivery-promise",route="POST /v1/promise",code="500"}'
+        values: '0+300x240'
+      - series: 'http_requests_total{app="delivery-promise",route="GET /healthz",code="200"}'
+        values: '0+30000x240'
+    promql_expr_test:
+      - expr: delivery_promise:error_ratio:rate5m
+        eval_time: 90m
+        exp_samples:
+          - labels: 'delivery_promise:error_ratio:rate5m'
+            value: 0.1
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: DeliveryPromiseErrorBudgetFastBurn
+        exp_alerts:
+          - exp_labels: {severity: page}
+            exp_annotations:
+              summary: delivery-promise is burning its error budget fast
+              runbook: docs/runbooks/slo-burn.md
+
+  # 0.4% errors is inside budget: no page, no ticket.
+  - interval: 30s
+    input_series:
+      - series: 'http_requests_total{app="delivery-promise",route="POST /v1/promise",code="200"}'
+        values: '0+2988x800'
+      - series: 'http_requests_total{app="delivery-promise",route="POST /v1/promise",code="500"}'
+        values: '0+12x800'
+    alert_rule_test:
+      - eval_time: 6h
+        alertname: DeliveryPromiseErrorBudgetFastBurn
+        exp_alerts: []
+      - eval_time: 6h
+        alertname: DeliveryPromiseErrorBudgetSlowBurn
+        exp_alerts: []
+
+  # No errors at all: the error ratio is 0, not "no data".
+  - interval: 30s
+    input_series:
+      - series: 'http_requests_total{app="delivery-promise",route="POST /v1/promise",code="200"}'
+        values: '0+3000x240'
+    promql_expr_test:
+      - expr: delivery_promise:error_ratio:rate5m
+        eval_time: 90m
+        exp_samples:
+          - labels: 'delivery_promise:error_ratio:rate5m'
+            value: 0
+
+  # Two builds serving for 15m+ = stuck rollout.
+  - interval: 1m
+    input_series:
+      - series: 'app_build_info{app="delivery-promise",commit="aaa",pod="p1"}'
+        values: '1x30'
+      - series: 'app_build_info{app="delivery-promise",commit="bbb",pod="p2"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: DeliveryPromiseMixedVersions
+        exp_alerts:
+          - exp_labels: {severity: ticket}
+            exp_annotations:
+              summary: more than one build of delivery-promise has been serving for 15m
+              runbook: docs/runbooks/rollout-failed.md
