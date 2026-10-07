@@ -250,7 +250,10 @@ The provisioning scripts assume only Ubuntu 24.04 and a directory shared between
 |---|---|
 | host freezes or VMs crawl during `vagrant up` | out of RAM: see *Host sizing*. Close apps, run `wsl --shutdown`, or use the 1-worker profile |
 | `kubeadm init` preflight: `the system RAM (... MB) is less than the minimum 1700 MB` | `CP_MEMORY` set below 2048 in `lab.env` |
-| `vagrant up` can't find the provider | the Vagrant VMware Utility service must be running: `Get-Service vagrant-vmware-utility` |
+| `Failed to open TCP connection to 127.0.0.1:9922` | the Vagrant VMware Utility service is stopped: `Get-Service VagrantVMware`. Its log (`C:\ProgramData\hashicorp\vagrant-vmware-desktop\logs\utility.log`) says why |
+| utility log: `failed to generate VMware installation information` | Workstation 26 doesn't write the 32-bit registry value the utility reads. In an **admin** PowerShell: `New-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\VMware, Inc." -Name Core -Value "VMware Workstation" -PropertyType String -Force`, then `Start-Service VagrantVMware`. Reinstalling VMware can remove it again |
+| `Vagrant failed to create a new VMware networking device` | create the lab network by hand once: Virtual Network Editor → Change Settings → Add Network **VMnet2**, Host-only, host adapter on, DHCP **off**, subnet `192.168.60.0` / `255.255.255.0` → Apply. Vagrant reuses it |
+| apt: `Failed to fetch http://us.archive.ubuntu.com/... Connection failed` | the Ubuntu archive is unreachable from your network. Set `UBUNTU_MIRROR` in `lab.env` to a mirror that works for you, then `vagrant provision <vm>` |
 | scripts fail with `$'\r': command not found` | CRLF line endings. `.gitattributes` forces LF; re-checkout: `git rm -r --cached . ; git reset --hard` |
 | worker waits forever for `join.sh` | cp1 provisioning failed; see `vagrant provision cp1`. VMs must come up with `--no-parallel` |
 | worker join fails with an auth error > 24 h after setup | token expired: `vagrant provision cp1 --provision-with control-plane`, then `vagrant provision workerN` |
