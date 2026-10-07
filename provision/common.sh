@@ -5,6 +5,20 @@
 set -euo pipefail
 source "${REPO_DIR:-/vagrant}/provision/lib.sh"
 
+log "APT mirror ($UBUNTU_MIRROR) and retries"
+# Canonical's default archive hosts can be slow or refuse connections from some
+# networks; a single dropped download otherwise fails the whole provision.
+# Rewrite every *.ubuntu.com archive/security URI (deb822 on 24.04, plus the
+# legacy sources.list on older boxes) to the configured mirror.
+for f in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
+  [[ -f "$f" ]] && sed -i -E "s#https?://([a-z0-9.-]+\.)?(archive|security)\.ubuntu\.com/ubuntu/?#${UBUNTU_MIRROR}/#g" "$f"
+done
+cat > /etc/apt/apt.conf.d/80-metal-to-pod-retries <<APT
+Acquire::Retries "5";
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
+APT
+
 log "Base packages"
 apt-get update -qq
 apt_install ca-certificates curl gnupg openssl jq git
