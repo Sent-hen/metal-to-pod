@@ -1,0 +1,10 @@
+# Platform layer: everything the app team does NOT own. Applied once by an
+# admin (control-plane.sh), never by the pipeline. The pipeline's credentials
+# cannot modify anything in this directory - see deployer-rbac.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespaces.yaml
+  - logistics-guardrails.yaml
+  - deployer-rbac.yaml
+  - ../monitoring

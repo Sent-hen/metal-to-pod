@@ -1,0 +1,38 @@
+{
+  "holidays": [
+    "2026-01-01", "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-05-31", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24"
+  ],
+  "distribution_centers": [
+    { "code": "ATL", "name": "Atlanta, GA", "timezone": "America/New_York",    "cutoff_hour": 15 },
+    { "code": "DAL", "name": "Dallas, TX",  "timezone": "America/Chicago",     "cutoff_hour": 16 },
+    { "code": "RNO", "name": "Reno, NV",    "timezone": "America/Los_Angeles", "cutoff_hour": 14 }
+  ],
+  "service_levels": {
+    "ground":    { "base_usd": 7.50,  "per_lb_usd": 0.55 },
+    "two_day":   { "base_usd": 14.00, "per_lb_usd": 1.10, "fixed_transit_days": 2 },
+    "overnight": { "base_usd": 29.00, "per_lb_usd": 2.25, "fixed_transit_days": 1 }
+  },
+  "lanes": [
+    { "dc": "DAL", "region": "south",     "zone": 2, "ground_days": 1 },
+    { "dc": "DAL", "region": "southeast", "zone": 4, "ground_days": 2 },
+    { "dc": "DAL", "region": "midwest",   "zone": 4, "ground_days": 2 },
+    { "dc": "DAL", "region": "northeast", "zone": 6, "ground_days": 3 },
+    { "dc": "DAL", "region": "west",      "zone": 6, "ground_days": 3 },
+    { "dc": "DAL", "region": "northwest", "zone": 7, "ground_days": 4 },
+
+    { "dc": "ATL", "region": "southeast", "zone": 2, "ground_days": 1 },
+    { "dc": "ATL", "region": "northeast", "zone": 4, "ground_days": 2 },
+    { "dc": "ATL", "region": "south",     "zone": 4, "ground_days": 2 },
+    { "dc": "ATL", "region": "midwest",   "zone": 5, "ground_days": 2 },
+    { "dc": "ATL", "region": "west",      "zone": 8, "ground_days": 5 },
+    { "dc": "ATL", "region": "northwest", "zone": 8, "ground_days": 5 },
+
+    { "dc": "RNO", "region": "west",      "zone": 2, "ground_days": 1 },
+    { "dc": "RNO", "region": "northwest", "zone": 3, "ground_days": 2 },
+    { "dc": "RNO", "region": "south",     "zone": 5, "ground_days": 3 },
+    { "dc": "RNO", "region": "midwest",   "zone": 6, "ground_days": 3 },
+    { "dc": "RNO", "region": "southeast", "zone": 8, "ground_days": 5 },
+    { "dc": "RNO", "region": "northeast", "zone": 8, "ground_days": 5 }
+  ]
+}

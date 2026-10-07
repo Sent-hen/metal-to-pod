@@ -1,0 +1,16 @@
+# Minimal Prometheus: one Deployment, config from files in this directory.
+# Intentionally not kube-prometheus-stack/operator - the point is to see the
+# scrape config and SLO rules in plain text.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - rbac.yaml
+  - prometheus.yaml
+configMapGenerator:
+  # The generated name carries a content hash, so editing either file and
+  # re-applying rolls Prometheus automatically.
+  - name: prometheus-config
+    files:
+      - prometheus.yml
+      - slo-rules.yml

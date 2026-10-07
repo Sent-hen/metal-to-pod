@@ -1,0 +1,14 @@
+# Vagrant machine state
+.vagrant/
+
+# Generated at provision time: PKI, kubeconfigs, join token, Jenkins password.
+# Contains private keys and cluster-admin credentials - never commit.
+shared/
+
+# Pipeline scratch (generated kustomize overlay)
+build/
+
+# Go
+app/bin/
+*.test
+*.out

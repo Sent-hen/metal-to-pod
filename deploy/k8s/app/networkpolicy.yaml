@@ -1,0 +1,15 @@
+# The namespace is default-deny (platform-owned). This opens exactly one port:
+# the HTTP port, reachable by clients via the NodePort and by Prometheus.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: delivery-promise-allow-http
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: delivery-promise
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP

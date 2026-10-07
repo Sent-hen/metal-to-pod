@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery-promise
+  labels:
+    app.kubernetes.io/name: delivery-promise
+    app.kubernetes.io/part-of: metal-to-pod
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5 # how far back `kubectl rollout undo` can go
+  # A rollout that makes no progress for this long is marked failed; the
+  # pipeline's `rollout status` then exits non-zero and triggers a rollback.
+  progressDeadlineSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Add one new pod before removing any old one. A new version that never
+      # becomes Ready therefore never reduces serving capacity.
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: delivery-promise
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: delivery-promise
+        app.kubernetes.io/part-of: metal-to-pod
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      automountServiceAccountToken: false # the app never talks to the API server
+      terminationGracePeriodSeconds: 30 # > DRAIN_SECONDS + shutdown timeout
+      # Spread replicas across workers so losing one VM loses at most one replica.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: delivery-promise
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: delivery-promise
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: NETWORK_CONFIG
+              value: /etc/delivery-promise/network.json
+            - name: DRAIN_SECONDS
+              value: "5"
+            # --- Reliability drills (docs/drills.md). Keep these off in git. ---
+            - name: SIMULATE_BAD_RELEASE
+              value: "false"
+            - name: FAULT_ERROR_RATE
+              value: "0"
+            - name: FAULT_LATENCY_MS
+              value: "0"
+          # startup: generous window for first boot; liveness is not checked until it passes.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 15
+          # readiness: gates traffic. Fails during drain and for bad releases.
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          # liveness: restarts a wedged process. Deliberately does NOT check
+          # dependencies - a restart would not fix those, it would only add load.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            # Memory limit protects the node. No CPU limit on purpose: CFS
+            # throttling adds tail latency, and requests already guarantee a share.
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: network-config
+              mountPath: /etc/delivery-promise
+              readOnly: true
+      volumes:
+        - name: network-config
+          configMap:
+            name: delivery-promise-network

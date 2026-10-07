@@ -1,0 +1,11 @@
+# Voluntary disruptions (kubectl drain, node upgrades) may never take the
+# service below 2 ready replicas. Try it: docs/drills.md, "Drain a worker".
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: delivery-promise
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: delivery-promise

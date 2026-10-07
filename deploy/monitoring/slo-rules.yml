@@ -1,0 +1,101 @@
+# SLOs for delivery-promise. The reasoning behind these numbers is in docs/slo.md.
+#
+#   Availability: 99.5% of /v1 requests succeed (non-5xx) over 30 days
+#                 -> error budget = 0.5% of requests (~3.6 h of full outage)
+#   Latency:      99% of /v1 requests complete in < 300 ms
+#
+# Alerting uses multi-window, multi-burn-rate rules (Google SRE Workbook, ch. 5):
+# page when the budget is burning fast enough to be gone in ~2 days, ticket when
+# it will be gone well before the 30-day window ends. The short window on each
+# rule makes the alert stop firing quickly once the problem is fixed.
+
+groups:
+  - name: delivery-promise-sli
+    interval: 30s
+    rules:
+      # "or vector(0)" keeps the error series at 0 instead of "no data" when
+      # nothing has failed yet - otherwise dashboards show gaps, not zeros.
+      - record: delivery_promise:requests:rate5m
+        expr: sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*"}[5m]))
+      - record: delivery_promise:errors:rate5m
+        expr: sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*", code=~"5.."}[5m])) or vector(0)
+      - record: delivery_promise:error_ratio:rate5m
+        expr: delivery_promise:errors:rate5m / delivery_promise:requests:rate5m
+
+      - record: delivery_promise:error_ratio:rate30m
+        expr: |
+          (sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*", code=~"5.."}[30m])) or vector(0))
+          / sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*"}[30m]))
+      - record: delivery_promise:error_ratio:rate1h
+        expr: |
+          (sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*", code=~"5.."}[1h])) or vector(0))
+          / sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*"}[1h]))
+      - record: delivery_promise:error_ratio:rate6h
+        expr: |
+          (sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*", code=~"5.."}[6h])) or vector(0))
+          / sum(rate(http_requests_total{app="delivery-promise", route=~".* /v1/.*"}[6h]))
+
+      - record: delivery_promise:latency_under_300ms_ratio:rate30m
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{app="delivery-promise", route=~".* /v1/.*", le="0.3"}[30m]))
+          / sum(rate(http_request_duration_seconds_count{app="delivery-promise", route=~".* /v1/.*"}[30m]))
+
+      # Business KPI: share of promises the network can fulfil in <= 2 business
+      # days. Not an SLO, but it moves when someone edits lanes or cutoffs.
+      - record: delivery_promise:two_day_coverage:ratio1h
+        expr: |
+          sum(rate(promise_transit_business_days_bucket{app="delivery-promise", le="2"}[1h]))
+          / sum(rate(promise_transit_business_days_count{app="delivery-promise"}[1h]))
+
+  - name: delivery-promise-alerts
+    rules:
+      - alert: DeliveryPromiseErrorBudgetFastBurn
+        # 14.4x burn = 2% of a 30-day budget per hour -> budget gone in ~2 days.
+        expr: |
+          delivery_promise:error_ratio:rate1h > (14.4 * 0.005)
+          and delivery_promise:error_ratio:rate5m > (14.4 * 0.005)
+        labels:
+          severity: page
+        annotations:
+          summary: delivery-promise is burning its error budget fast
+          runbook: docs/runbooks/slo-burn.md
+
+      - alert: DeliveryPromiseErrorBudgetSlowBurn
+        # 6x burn = 5% of the budget per 6h -> budget gone in ~5 days.
+        expr: |
+          delivery_promise:error_ratio:rate6h > (6 * 0.005)
+          and delivery_promise:error_ratio:rate30m > (6 * 0.005)
+        labels:
+          severity: ticket
+        annotations:
+          summary: delivery-promise error rate will exhaust the monthly budget
+          runbook: docs/runbooks/slo-burn.md
+
+      - alert: DeliveryPromiseLatencySLO
+        expr: delivery_promise:latency_under_300ms_ratio:rate30m < 0.99
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: fewer than 99% of requests are served under 300ms
+          runbook: docs/runbooks/slo-burn.md
+
+      - alert: DeliveryPromiseReplicasLow
+        # The PodDisruptionBudget promises 2; below that, one more failure is an outage.
+        expr: (sum(up{app="delivery-promise"}) or vector(0)) < 2
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: fewer than 2 delivery-promise replicas are up
+          runbook: docs/runbooks/node-not-ready.md
+
+      - alert: DeliveryPromiseMixedVersions
+        # Two commits serving for 15m means a rollout is stuck half-way.
+        expr: count(count by (commit) (app_build_info{app="delivery-promise"})) > 1
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: more than one build of delivery-promise has been serving for 15m
+          runbook: docs/runbooks/rollout-failed.md

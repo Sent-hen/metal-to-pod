@@ -1,2 +1,7 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Everything in this repo is consumed by Linux VMs through the Vagrant synced
+# folder, so force LF in the working tree even on Windows (core.autocrlf=true
+# would otherwise turn every shell script into "bad interpreter: /bin/bash^M").
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
